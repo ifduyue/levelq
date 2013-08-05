@@ -500,8 +500,8 @@ int main(int argc, char *argv[]) {
     int r;
     
     conf_init(conf);
-    if (argc == 2) {
-        conf_loadfile(conf, argv[1]);
+    if (argc == 2 && conf_loadfile(conf, argv[1]) != 0) {
+        terrx(1, "failed to load conf %s", argv[1]);
     }
     
     db_options = leveldb_options_create();
