@@ -60,12 +60,13 @@
 typedef struct {
     char host[1024];
     unsigned short port;
-    unsigned int cachesize;
-    unsigned int blocksize;
-    size_t writebuffersize;
+    unsigned int cache_size;
+    unsigned int block_size;
+    size_t write_buffer_size;
     char db[10240];
     unsigned int tcp_keepalive;
     unsigned int tcp_nodelay;
+    unsigned int delete_after_get;
 } conf_t;
 
 typedef struct {
@@ -113,9 +114,9 @@ static struct {
 void conf_init(conf_t *conf) {
     strcpy(conf->host, "127.0.0.1");
     conf->port = 1219;
-    conf->cachesize = 128 * 1048576; /* 128MB */
-    conf->blocksize = 4 * 1024; /* 4KB */
-    conf->writebuffersize = 32 * 1048576; /* 32MB */
+    conf->cache_size = 128 * 1048576; /* 128MB */
+    conf->block_size = 4 * 1024; /* 4KB */
+    conf->write_buffer_size = 32 * 1048576; /* 32MB */
     conf->tcp_keepalive = 10;
     conf->tcp_nodelay = 1;
     strcpy(conf->db, "./db");
@@ -148,14 +149,14 @@ int conf_loadfile(conf_t *conf, char *filename) {
         else if (!strcmp(k, "port")) {
             sscanf(v, "%hu", &conf->port);
         }
-        else if (!strcmp(k, "cachesize")) {
-            sscanf(v, "%u", &conf->cachesize);
+        else if (!strcmp(k, "cache_size")) {
+            sscanf(v, "%u", &conf->cache_size);
         }
-        else if (!strcmp(k, "blocksize")) {
-            sscanf(v, "%u", &conf->blocksize);
+        else if (!strcmp(k, "block_size")) {
+            sscanf(v, "%u", &conf->block_size);
         }
-        else if (!strcmp(k, "writebuffersize")) {
-            sscanf(v, "%zu", &conf->writebuffersize);
+        else if (!strcmp(k, "write_buffer_size")) {
+            sscanf(v, "%zu", &conf->write_buffer_size);
         }
         else if (!strcmp(k, "db")) {
             strcpy(conf->db, v);
@@ -165,6 +166,9 @@ int conf_loadfile(conf_t *conf, char *filename) {
         }
         else if (!strcmp(k, "tcp_nodelay")) {
             sscanf(v, "%u", &conf->tcp_nodelay);
+        }
+        else if (!strcmp(k, "delete_after_get")) {
+            sscanf(v, "%u", &conf->delete_after_get);
         }
         else {
             twarnx("error in %s line %i", filename, line);
@@ -414,7 +418,6 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             set_queue_getput_pos(request->qname, request->qname_length, getpos + 1, putpos);
-            leveldb_delete(db, db_woptions, qname, qlen, NULL);
             len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 200, "OK", vallen);
             uvbuf[0].base = repbuf;
             uvbuf[0].len = len;
@@ -422,6 +425,9 @@ int on_message_complete(http_parser* parser) {
             uvbuf[1].len = vallen;
             uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             leveldb_free(val);
+            if (conf->delete_after_get) {
+                leveldb_delete(db, db_woptions, qname, qlen, NULL);
+            }
             break;
         case HTTP_PUT:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
@@ -506,9 +512,9 @@ int main(int argc, char *argv[]) {
     
     db_options = leveldb_options_create();
     leveldb_options_set_create_if_missing(db_options, 1);
-    leveldb_options_set_cache(db_options, leveldb_cache_create_lru(conf->cachesize));
-    leveldb_options_set_block_size(db_options, conf->blocksize);
-    leveldb_options_set_write_buffer_size(db_options, conf->writebuffersize);
+    leveldb_options_set_cache(db_options, leveldb_cache_create_lru(conf->cache_size));
+    leveldb_options_set_block_size(db_options, conf->block_size);
+    leveldb_options_set_write_buffer_size(db_options, conf->write_buffer_size);
     db = leveldb_open(db_options, conf->db, &errstr);
     if (errstr) {
         terrx(1, "unable to open db at %s: %s", conf->db, errstr);
@@ -535,6 +541,15 @@ int main(int argc, char *argv[]) {
 
     r = uv_listen((uv_stream_t*)&server, 128, on_connect);
     uv_assert(r, "uv_listen");
+
+    printf("listening on      : %s:%hu\n", conf->host, conf->port);
+    printf("db                : %s\n", conf->db);
+    printf("cache_size        : %u\n", conf->cache_size);
+    printf("block_size        : %u\n", conf->block_size);
+    printf("write_buffer_size : %u\n", conf->write_buffer_size);
+    printf("tcp_keepalive     : %u\n", conf->tcp_keepalive);
+    printf("tcp_nodelay       : %s\n", conf->tcp_nodelay ? "true" : "false");
+    printf("delete_after_get  : %s\n", conf->delete_after_get ? "true" : "false");
 
     uv_run(uv_loop, UV_RUN_DEFAULT);
     leveldb_close(db);
