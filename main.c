@@ -62,6 +62,7 @@ typedef struct {
     unsigned short port;
     unsigned int cachesize;
     unsigned int blocksize;
+    size_t writebuffersize;
     char db[10240];
     unsigned int tcp_keepalive;
     unsigned int tcp_nodelay;
@@ -114,6 +115,7 @@ void conf_init(conf_t *conf) {
     conf->port = 1219;
     conf->cachesize = 128 * 1048576; /* 128MB */
     conf->blocksize = 4 * 1024; /* 4KB */
+    conf->writebuffersize = 32 * 1048576; /* 32MB */
     conf->tcp_keepalive = 10;
     conf->tcp_nodelay = 1;
     strcpy(conf->db, "./db");
@@ -151,6 +153,9 @@ int conf_loadfile(conf_t *conf, char *filename) {
         }
         else if (!strcmp(k, "blocksize")) {
             sscanf(v, "%u", &conf->blocksize);
+        }
+        else if (!strcmp(k, "writebuffersize")) {
+            sscanf(v, "%zu", &conf->writebuffersize);
         }
         else if (!strcmp(k, "db")) {
             strcpy(conf->db, v);
@@ -503,6 +508,7 @@ int main(int argc, char *argv[]) {
     leveldb_options_set_create_if_missing(db_options, 1);
     leveldb_options_set_cache(db_options, leveldb_cache_create_lru(conf->cachesize));
     leveldb_options_set_block_size(db_options, conf->blocksize);
+    leveldb_options_set_write_buffer_size(db_options, conf->writebuffersize);
     db = leveldb_open(db_options, conf->db, &errstr);
     if (errstr) {
         terrx(1, "unable to open db at %s: %s", conf->db, errstr);
