@@ -409,6 +409,7 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             set_queue_getput_pos(request->qname, request->qname_length, getpos + 1, putpos);
+            leveldb_delete(db, db_woptions, qname, qlen, NULL);
             len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 200, "OK", vallen);
             uvbuf[0].base = repbuf;
             uvbuf[0].len = len;
