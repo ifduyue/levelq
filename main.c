@@ -115,10 +115,11 @@ void conf_init(conf_t *conf) {
     strcpy(conf->host, "127.0.0.1");
     conf->port = 1219;
     conf->cache_size = 128 * 1048576; /* 128MB */
-    conf->block_size = 4 * 1024; /* 4KB */
-    conf->write_buffer_size = 32 * 1048576; /* 32MB */
+    conf->block_size = 8 * 1024; /* 8KB */
+    conf->write_buffer_size = 8 * 1048576; /* 8MB */
     conf->tcp_keepalive = 10;
     conf->tcp_nodelay = 1;
+    conf->delete_after_get = 0;
     strcpy(conf->db, "./db");
 }
 
@@ -515,6 +516,7 @@ int main(int argc, char *argv[]) {
     leveldb_options_set_cache(db_options, leveldb_cache_create_lru(conf->cache_size));
     leveldb_options_set_block_size(db_options, conf->block_size);
     leveldb_options_set_write_buffer_size(db_options, conf->write_buffer_size);
+    leveldb_options_set_filter_policy(db_options, leveldb_filterpolicy_create_bloom(10));
     db = leveldb_open(db_options, conf->db, &errstr);
     if (errstr) {
         terrx(1, "unable to open db at %s: %s", conf->db, errstr);
