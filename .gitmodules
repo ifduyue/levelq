@@ -1,0 +1,9 @@
+[submodule "deps/leveldb"]
+	path = deps/leveldb
+	url = https://code.google.com/p/leveldb/
+[submodule "deps/libuv"]
+	path = deps/libuv
+	url = https://github.com/joyent/libuv.git
+[submodule "deps/http-parser"]
+	path = deps/http-parser
+	url = https://github.com/joyent/http-parser.git
