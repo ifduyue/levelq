@@ -75,9 +75,7 @@ typedef struct {
     enum http_method method;
     const char *body;
     size_t body_length;
-    unsigned long long reqnum;
 } request_t;
-static unsigned long long reqnum = 1;
 
 typedef struct {
     http_parser parser;
@@ -85,9 +83,7 @@ typedef struct {
     uv_write_t write_req;
     request_t request;
     unsigned short keepalive : 1;
-    unsigned long long connum;
 } client_t;
-static unsigned long long connum = 1;
 
 static conf_t conf[1];
 static char repbuf[1048576];
@@ -227,7 +223,6 @@ void on_connect(uv_stream_t* server_handle, int status) {
     client->parser.data = client;
     client->handle.data = client;
     client->keepalive = 0;
-    client->connum = connum++;
 
     r = uv_accept(server_handle, (uv_stream_t*)&client->handle);
     uv_check(r, "accept");
@@ -239,7 +234,6 @@ int on_message_begin(http_parser* parser) {
     client_t *client = (client_t *)parser->data;
     client->request.qname_length = 0;
     client->request.body_length = 0;
-    client->request.reqnum = reqnum++;
     return 0;
 }
 
