@@ -538,7 +538,7 @@ int main(int argc, char *argv[]) {
     r = uv_listen((uv_stream_t*)&server, 128, on_connect);
     uv_assert(r, "uv_listen");
 
-    printf("listening on      : %s:%hu\n", conf->host, conf->port);
+    printf("     levelq "LEVELQ_VERSION"\n");
     printf("db                : %s\n", conf->db);
     printf("cache_size        : %u\n", conf->cache_size);
     printf("block_size        : %u\n", conf->block_size);
@@ -546,6 +546,8 @@ int main(int argc, char *argv[]) {
     printf("tcp_keepalive     : %u\n", conf->tcp_keepalive);
     printf("tcp_nodelay       : %s\n", conf->tcp_nodelay ? "true" : "false");
     printf("delete_after_get  : %s\n", conf->delete_after_get ? "true" : "false");
+    printf("\n");
+    printf("listening on %s:%hu\n", conf->host, conf->port);
 
     uv_run(uv_loop, UV_RUN_DEFAULT);
     leveldb_close(db);
