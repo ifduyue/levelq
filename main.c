@@ -48,7 +48,7 @@
 #define LEVELQ_VERSION "0.0.1"
 #define QUEUE_CHARS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_."
 #define MAX_QNAME_LENGTH 200
-#define HEADER "HTTP/%hu.%hu %d %s\r\n"\
+#define HEADER "HTTP/1.1 %d %s\r\n"\
                  "Server: levelq/"LEVELQ_VERSION"\r\n"\
                  "Content-Type: application/octet-stream\r\n"\
                  "Content-Length: %zu\r\n"\
@@ -361,7 +361,7 @@ int on_message_complete(http_parser* parser) {
     uint64_t getpos, putpos;
     if (request->qname_length == 0 ||  strspn(request->qname, QUEUE_CHARS) != request->qname_length) {
         /* invalid qname */
-        len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 400, "Bad Request", (size_t)18);
+        len = snprintf(repbuf, 1048576, HEADER, 400, "Bad Request", (size_t)18);
         uvbuf[0].base = repbuf;
         uvbuf[0].len = len;
         uvbuf[1].base = "INVALID QUEUE NAME";
@@ -373,7 +373,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_GET:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
             if (r > 0) {
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 404, "NOT FOUND", (size_t)16);
+                len = snprintf(repbuf, 1048576, HEADER, 404, "NOT FOUND", (size_t)16);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "QUEUE NOT EXISTS";
@@ -382,7 +382,7 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             else if (r < 0) {
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 500, "Internal Server Error", (size_t)21);
+                len = snprintf(repbuf, 1048576, HEADER, 500, "Internal Server Error", (size_t)21);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
@@ -391,7 +391,7 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             if (getpos == putpos) {
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 404, "NOT FOUND", (size_t)11);
+                len = snprintf(repbuf, 1048576, HEADER, 404, "NOT FOUND", (size_t)11);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "QUEUE EMPTY";
@@ -406,14 +406,14 @@ int on_message_complete(http_parser* parser) {
             if (err != NULL) {
                 uvbuf[1].base = err;
                 uvbuf[1].len = strlen(err);
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 400, "Bad Request", uvbuf[1].len);
+                len = snprintf(repbuf, 1048576, HEADER, 400, "Bad Request", uvbuf[1].len);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             set_queue_getput_pos(request->qname, request->qname_length, getpos + 1, putpos);
-            len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 200, "OK", vallen);
+            len = snprintf(repbuf, 1048576, HEADER, 200, "OK", vallen);
             uvbuf[0].base = repbuf;
             uvbuf[0].len = len;
             uvbuf[1].base = val;
@@ -427,7 +427,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_PUT:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
             if (r < 0) {
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 500, "Internal Server Error", (size_t)21);
+                len = snprintf(repbuf, 1048576, HEADER, 500, "Internal Server Error", (size_t)21);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
@@ -439,7 +439,7 @@ int on_message_complete(http_parser* parser) {
             leveldb_put(db, db_woptions, qname, qlen, request->body, request->body_length, &err);
             if (err == NULL) {
                 set_queue_getput_pos(request->qname, request->qname_length, getpos, putpos+1);
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 200, "OK", (size_t)2);
+                len = snprintf(repbuf, 1048576, HEADER, 200, "OK", (size_t)2);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "OK";
@@ -449,7 +449,7 @@ int on_message_complete(http_parser* parser) {
             else {
                 uvbuf[1].base = err;
                 uvbuf[1].len = strlen(err);
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 400, "Bad Request", uvbuf[1].len);
+                len = snprintf(repbuf, 1048576, HEADER, 400, "Bad Request", uvbuf[1].len);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
@@ -458,7 +458,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_DELETE:
         case HTTP_PURGE:
             set_queue_getput_pos(request->qname, request->qname_length, 0, 0);
-            len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 200, "OK", (size_t)2);
+            len = snprintf(repbuf, 1048576, HEADER, 200, "OK", (size_t)2);
             uvbuf[0].base = repbuf;
             uvbuf[0].len = len;
             uvbuf[1].base = "OK";
@@ -468,7 +468,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_OPTIONS:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
             if (r < 0) {
-                len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 500, "Internal Server Error", (size_t)21);
+                len = snprintf(repbuf, 1048576, HEADER, 500, "Internal Server Error", (size_t)21);
                 uvbuf[0].base = repbuf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
@@ -479,13 +479,13 @@ int on_message_complete(http_parser* parser) {
             len = snprintf(repbuf2, 1048576, "{\"name\":\"%s\",\"putpos\":%"PRIu64",\"getpos\":%"PRIu64"}\n", request->qname, putpos, getpos);
             uvbuf[1].base = repbuf2;
             uvbuf[1].len = len;
-            len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 200, "OK", (size_t)len);
+            len = snprintf(repbuf, 1048576, HEADER, 200, "OK", (size_t)len);
             uvbuf[0].base = repbuf;
             uvbuf[0].len = len;
             uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
         default:
-            len = snprintf(repbuf, 1048576, HEADER, parser->http_major, parser->http_minor, 400, "Bad Request", (size_t)14);
+            len = snprintf(repbuf, 1048576, HEADER, 400, "Bad Request", (size_t)14);
             uvbuf[0].base = repbuf;
             uvbuf[0].len = len;
             uvbuf[1].base = "INVALID METHOD";
