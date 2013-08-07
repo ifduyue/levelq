@@ -62,7 +62,7 @@ typedef struct {
     unsigned short port;
     unsigned int cache_size;
     unsigned int block_size;
-    size_t write_buffer_size;
+    unsigned int write_buffer_size;
     char db[10240];
     unsigned int tcp_keepalive;
     unsigned int tcp_nodelay;
@@ -153,7 +153,7 @@ int conf_loadfile(conf_t *conf, char *filename) {
             sscanf(v, "%u", &conf->block_size);
         }
         else if (!strcmp(k, "write_buffer_size")) {
-            sscanf(v, "%zu", &conf->write_buffer_size);
+            sscanf(v, "%u", &conf->write_buffer_size);
         }
         else if (!strcmp(k, "db")) {
             strcpy(conf->db, v);
