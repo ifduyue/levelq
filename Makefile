@@ -1,4 +1,4 @@
-CFLAGS=-Wall -Wextra -Werror -O2 -g -pthread -I. -Ideps -Ideps/http-parser -Ideps/leveldb/include -Ideps/libuv/include
+CFLAGS=-Wall -Wextra -Werror -Wno-error=unused-result -O2 -g -pthread -I. -Ideps -Ideps/http-parser -Ideps/leveldb/include -Ideps/libuv/include
 CLIBS=-static -Ldeps/leveldb -Ldeps/libuv -Ldeps/http-parser -lleveldb -luv -lhttp_parser -lpthread -lrt -lstdc++
 
 levelq: main.c deps

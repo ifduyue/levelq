@@ -385,7 +385,7 @@ int on_message_complete(http_parser* parser) {
     uint64_t getpos, putpos;
 
     repbuf_t *repbuf  = repbuf_new(BUFSIZE);
-    client->write_req->data = repbuf;
+    client->write_req.data = repbuf;
     if (request->qname_length == 0 ||  strspn(request->qname, QUEUE_CHARS) != request->qname_length) {
         /* invalid qname */
         len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)18);
@@ -428,7 +428,7 @@ int on_message_complete(http_parser* parser) {
             }
             size_t vallen;
             qlen = snprintf(qname, sizeof(qname), "%s:%"PRIu64, request->qname, getpos);
-            repbuf->leveldb_val = leveldb_get(db, db_roptions, qname, qlen, &vallen, repbuf->leveldb_err);
+            repbuf->leveldb_val = leveldb_get(db, db_roptions, qname, qlen, &vallen, &repbuf->leveldb_err);
             if (repbuf->leveldb_err != NULL) {
                 uvbuf[1].base = repbuf->leveldb_err;
                 uvbuf[1].len = strlen(repbuf->leveldb_err);
@@ -442,10 +442,9 @@ int on_message_complete(http_parser* parser) {
             len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", vallen);
             uvbuf[0].base = repbuf->buf;
             uvbuf[0].len = len;
-            uvbuf[1].base = val;
+            uvbuf[1].base = repbuf->leveldb_val;
             uvbuf[1].len = vallen;
             uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
-            leveldb_free(val);
             if (conf->delete_after_get) {
                 leveldb_delete(db, db_woptions, qname, qlen, NULL);
             }
@@ -462,7 +461,7 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             qlen = snprintf(qname, sizeof(qname), "%s:%"PRIu64, request->qname, putpos);
-            leveldb_put(db, db_woptions, qname, qlen, request->body, request->body_length, repbuf->leveldb_err);
+            leveldb_put(db, db_woptions, qname, qlen, request->body, request->body_length, &repbuf->leveldb_err);
             if (repbuf->leveldb_err == NULL) {
                 set_queue_getput_pos(request->qname, request->qname_length, getpos, putpos+1);
                 len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2);
