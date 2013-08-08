@@ -99,6 +99,18 @@ repbuf_t *repbuf_new(size_t size) {
     return repbuf;
 }
 
+void repbuf_free(repbuf_t *repbuf) {
+    if (repbuf) {
+        if (repbuf->leveldb_err) {
+            free(repbuf->leveldb_err);
+        }
+        if (repbuf->leveldb_val) {
+            leveldb_free(repbuf->leveldb_val);
+        }
+        free(repbuf);
+    }
+}
+
 static conf_t conf[1];
 static uv_buf_t uvbuf[2];
 
@@ -363,13 +375,7 @@ void after_write(uv_write_t *req, int status) {
     uv_check(status, "write");
 
     repbuf_t *repbuf = (repbuf_t *)req->data;
-    if (repbuf->leveldb_val) {
-        leveldb_free(repbuf->leveldb_val);
-    }
-    if (repbuf->leveldb_err) {
-        free(repbuf->leveldb_err);
-    }
-    free(repbuf);
+    repbuf_free(repbuf);
 
     client_t *client = (client_t *)container_of(req, client_t, write_req);
     if (!client->keepalive && !uv_is_closing((uv_handle_t *)req->handle)) {
