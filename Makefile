@@ -2,6 +2,8 @@ CFLAGS=-Wall -Wextra -Werror -O2 -g -pthread -I. -Ideps -Ideps/http-parser -Idep
 CLIBS=deps/libuv/libuv.a deps/leveldb/libleveldb.a deps/http-parser/http_parser.o -lstdc++
 ifeq ($(shell uname), Darwin)
 	CLIBS+=-framework Carbon -framework CoreServices
+else
+	CLIBS+=-lrt
 endif
 
 levelq: main.c deps
