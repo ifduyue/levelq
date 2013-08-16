@@ -2,203 +2,45 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <inttypes.h>
 #include <assert.h>
 #include <err.h>
+#include <sys/stat.h>
+#include <signal.h>
 
-#include "leveldb/c.h"
-#include "http_parser.h"
-#include "uv.h"
-
-/** give offset of a field inside struct */
-#ifndef offsetof
-#define offsetof(type, field) ((unsigned long)&(((type *)0)->field))
-#endif
-
-/** given pointer to field inside struct, return pointer to struct */
-#ifndef container_of
-#define container_of(ptr, type, field) ((type *)((char *)(ptr) - offsetof(type, field)))
-#endif
-
-#define twarn(fmt, args...) warn("%s:%d in %s: " fmt, \
-                                 __FILE__, __LINE__, __func__, ##args)
-#define twarnx(fmt, args...) warnx("%s:%d in %s: " fmt, \
-                                   __FILE__, __LINE__, __func__, ##args)
-#define terr(eval, fmt, args...) err(eval, "%s:%d in %s: " fmt, \
-                                 __FILE__, __LINE__, __func__, ##args)
-#define terrx(eval, fmt, args...) errx(eval, "%s:%d in %s: " fmt, \
-                                   __FILE__, __LINE__, __func__, ##args)
-
-#define uv_check(r, msg) \
-    do { \
-        if (r) { \
-            uv_err_t err = uv_last_error(uv_loop); \
-            twarnx("%s: %s", msg, uv_strerror(err)); \
-        } \
-    } while (0)
-
-#define uv_assert(r, msg) \
-    do { \
-        if (r) { \
-            uv_err_t err = uv_last_error(uv_loop); \
-            terrx(1, "%s: %s", msg, uv_strerror(err)); \
-        } \
-    } while (0)
-    
-#define BUFSIZE 512
-#define LEVELQ_VERSION "0.0.1"
-#define QUEUE_CHARS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_."
-#define MAX_QNAME_LENGTH 200
-#define HEADER "HTTP/1.1 %d %s\r\n"\
-                 "Server: levelq/"LEVELQ_VERSION"\r\n"\
-                 "Content-Type: application/octet-stream\r\n"\
-                 "Content-Length: %zu\r\n"\
-                 "Connection: keep-alive\r\n"\
-                 "Cache-Control: no-store, no-cache, must-revalidate\r\n"\
-                 "Pragma: no-cache\r\n"\
-                 "\r\n"
+#include "h.h"
+#include "db.h"
+#include "db_lmdb.h"
+#include "db_leveldb.h"
+#include "conf.h"
 
 typedef struct {
-    char host[1024];
-    unsigned short port;
-    unsigned int cache_size;
-    unsigned int block_size;
-    unsigned int write_buffer_size;
-    char db[10240];
-    unsigned int tcp_keepalive;
-    unsigned int tcp_nodelay;
-    unsigned int delete_after_get;
-} conf_t;
-
-typedef struct {
-    char qname[200];
-    size_t qname_length;
-    enum http_method method;
-    const char *body;
-    size_t body_length;
-} request_t;
-
-typedef struct {
-    http_parser parser;
-    uv_tcp_t handle;
-    uv_write_t write_req;
-    request_t request;
-    unsigned short keepalive : 1;
-} client_t;
-
-typedef struct {
-    char *leveldb_val;
-    char *leveldb_err;
+    dbi_t *item;
     char buf[1];
 } repbuf_t;
 
 repbuf_t *repbuf_new(size_t size) {
     repbuf_t *repbuf = (repbuf_t *)malloc(sizeof(repbuf_t) + size);
-    repbuf->leveldb_err = NULL;
-    repbuf->leveldb_val = NULL;
+    assert(repbuf);
+    repbuf->item = NULL;
     return repbuf;
 }
 
 void repbuf_free(repbuf_t *repbuf) {
     if (repbuf) {
-        if (repbuf->leveldb_err) {
-            free(repbuf->leveldb_err);
-        }
-        if (repbuf->leveldb_val) {
-            leveldb_free(repbuf->leveldb_val);
+        if (repbuf->item) {
+            dbi_destroy(repbuf->item);
         }
         free(repbuf);
     }
 }
 
-static conf_t conf[1];
-static uv_buf_t uvbuf[2];
-
-static leveldb_t *db;
-static leveldb_options_t *db_options;
-static leveldb_readoptions_t *db_roptions;
-static leveldb_writeoptions_t *db_woptions;
-
-static uv_loop_t* uv_loop;
-static uv_tcp_t server;
-
-static http_parser_settings parser_settings;
-
-static struct {
-    struct {
-        const char *at;
-        size_t length;
-    } k, v;
-} header_kv;
-
-void conf_init(conf_t *conf) {
-    strcpy(conf->host, "127.0.0.1");
-    conf->port = 1219;
-    conf->cache_size = 128 * 1048576; /* 128MB */
-    conf->block_size = 8 * 1024; /* 8KB */
-    conf->write_buffer_size = 8 * 1048576; /* 8MB */
-    conf->tcp_keepalive = 10;
-    conf->tcp_nodelay = 1;
-    conf->delete_after_get = 0;
-    strcpy(conf->db, "./db");
-}
-
-int conf_loadfile(conf_t *conf, char *filename) {
-    FILE *fp;
-    char k[1024], v[1024], s[1024];
-    unsigned int line = 0;
-
-    fp = fopen(filename, "r");
-    if (!fp) {
-        twarn("unable to open %s", filename);
-        return 1;
-    }
-    while (!feof(fp)) {
-        line++;
-        *s = 0;
-        fscanf(fp, "%1024[^\n#]s", s);
-        fscanf(fp, "%*[^\n]s");
-        fgetc(fp);
-        if (strchr(s, '=') == NULL) {
-            continue;
-        }
-        sscanf(s, "%[^= \t\r]s", k);
-        sscanf(strchr(s, '=') + 1, "%*[ \t\r]%[^ \t\r\n]s", v);
-        if (strcmp(k, "host") == 0) {
-            strcpy(conf->host, v);
-        }
-        else if (!strcmp(k, "port")) {
-            sscanf(v, "%hu", &conf->port);
-        }
-        else if (!strcmp(k, "cache_size")) {
-            sscanf(v, "%u", &conf->cache_size);
-        }
-        else if (!strcmp(k, "block_size")) {
-            sscanf(v, "%u", &conf->block_size);
-        }
-        else if (!strcmp(k, "write_buffer_size")) {
-            sscanf(v, "%u", &conf->write_buffer_size);
-        }
-        else if (!strcmp(k, "db")) {
-            strcpy(conf->db, v);
-        }
-        else if (!strcmp(k, "tcp_keepalive")) {
-            sscanf(v, "%u", &conf->tcp_keepalive);
-        }
-        else if (!strcmp(k, "tcp_nodelay")) {
-            sscanf(v, "%u", &conf->tcp_nodelay);
-        }
-        else if (!strcmp(k, "delete_after_get")) {
-            sscanf(v, "%u", &conf->delete_after_get);
-        }
-        else {
-            twarnx("error in %s line %i", filename, line);
-            return 1;
-        }
-    }
-    fclose(fp);
-    return 0;
-}
+uv_loop_t* uv_loop;
+uv_tcp_t server;
+http_parser_settings parser_settings;
+header_kv_t header_kv;
+uv_buf_t uvbuf[2];
 
 void on_close(uv_handle_t* handle) {
     client_t* client = (client_t*)handle->data;
@@ -280,7 +122,6 @@ int on_url(http_parser* parser, const char* at, size_t length) {
             request->qname[url.field_data[UF_PATH].len] = 0;
         }
     }
-    
     return 0;
 }
 
@@ -316,59 +157,51 @@ int on_body(http_parser* parser, const char* at, size_t length) {
 }
 
 int queue_getput_pos(char *queue, uint64_t *getpos, uint64_t *putpos) {
-    char *val=NULL, *err=NULL, tmp[48] = {0};
-    size_t len;
-    
-    val = leveldb_get(db, db_roptions, queue, strlen(queue), &len, &err);
-    if (err != NULL) {
-        twarn("%s", err);
-        free(err);
+    char tmp[48] = {0};
+    dbi_t k, *vp;
+    k.data = queue;
+    k.len = strlen(queue);
+    vp = db_get(&k);
+    if (vp->err != NULL) {
+        twarn("%s", vp->err);
+        dbi_destroy(vp);
         return -1;
     }
-    else if (val == NULL) {
+    else if (vp->data == NULL) {
         // key not exists
-        if (getpos) {
-            *getpos = 0;
-        }
-        if (putpos) {
-            *putpos = 0;
-        }
+        *getpos = 0;
+        *putpos = 0;
+        dbi_destroy(vp);
         return 1;
     }
     else {
-        char *period = strchr(val, ',');
-        if (period != NULL) {
-            *period = 0;
-            if (getpos) {
-                sscanf(val, "%"PRIu64, getpos);
-            }
-            if (putpos) {
-                memcpy(tmp, period + 1, len - (period - val) - 1);
-                sscanf(tmp, "%"PRIu64, putpos);
-            }
-            leveldb_free(val);
+        int r;
+        uint64_t get, put;
+        memcpy(tmp, vp->data, vp->len);
+        r = sscanf(tmp, "%"PRIu64",%"PRIu64, &get, &put);
+        if (r == 2) {
+            *getpos = get;
+            *putpos = put;
+            dbi_destroy(vp);
             return 0;
         }
         else {
-            *period = ',';
-            memcpy(tmp, val, len);
-            twarnx("invalid key: %s", val);
-            leveldb_free(val);
+            twarnx("invalid key: %.*s", (int)vp->len, vp->data);
+            dbi_destroy(vp);
             return -1;
         }
     }
 }
 
-int set_queue_getput_pos(char *qname, int qlen, uint64_t getpos, uint64_t putpos) {
-    char val[48], *err=NULL;
-    int len = snprintf(val, 48, "%" PRIu64 ",%" PRIu64, getpos, putpos);
-    leveldb_put(db, db_woptions, qname, qlen, val, len, &err);
-    if (err != NULL) {
-        twarn("unable to leveldb_put %s at %s: %s", val, qname, err); 
-        free(err);
-        return 1;
-    }
-    return 0;
+void set_queue_getput_pos(char *qname, int qlen, uint64_t getpos, uint64_t putpos) {
+    dbi_t key, val;
+    char s[48];
+    int len = snprintf(s, 48, "%" PRIu64 ",%" PRIu64, getpos, putpos);
+    val.data = s;
+    val.len = len;
+    key.data = qname;
+    key.len = qlen;
+    db_put(&key, &val);
 }
 
 void after_write(uv_write_t *req, int status) {
@@ -389,6 +222,7 @@ int on_message_complete(http_parser* parser) {
     char qname[255];
     int qlen, len, r;
     uint64_t getpos, putpos;
+    dbi_t k, v, *vp;
 
     repbuf_t *repbuf  = repbuf_new(BUFSIZE);
     client->write_req.data = repbuf;
@@ -432,12 +266,15 @@ int on_message_complete(http_parser* parser) {
                 uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
-            size_t vallen;
+
             qlen = snprintf(qname, sizeof(qname), "%s:%"PRIu64, request->qname, getpos);
-            repbuf->leveldb_val = leveldb_get(db, db_roptions, qname, qlen, &vallen, &repbuf->leveldb_err);
-            if (repbuf->leveldb_err != NULL) {
-                uvbuf[1].base = repbuf->leveldb_err;
-                uvbuf[1].len = strlen(repbuf->leveldb_err);
+            k.len = qlen;
+            k.data = qname;
+            vp = db_get(&k);
+            repbuf->item = vp;
+            if (vp->err != NULL) {
+                uvbuf[1].base = vp->err;
+                uvbuf[1].len = strlen(vp->err);
                 len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", uvbuf[1].len);
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
@@ -445,14 +282,14 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             set_queue_getput_pos(request->qname, request->qname_length, getpos + 1, putpos);
-            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", vallen);
+            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", vp->len);
             uvbuf[0].base = repbuf->buf;
             uvbuf[0].len = len;
-            uvbuf[1].base = repbuf->leveldb_val;
-            uvbuf[1].len = vallen;
+            uvbuf[1].base = vp->data;
+            uvbuf[1].len = vp->len;
             uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             if (conf->delete_after_get) {
-                leveldb_delete(db, db_woptions, qname, qlen, NULL);
+                db_delete(&k);
             }
             break;
         case HTTP_PUT:
@@ -467,24 +304,18 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             qlen = snprintf(qname, sizeof(qname), "%s:%"PRIu64, request->qname, putpos);
-            leveldb_put(db, db_woptions, qname, qlen, request->body, request->body_length, &repbuf->leveldb_err);
-            if (repbuf->leveldb_err == NULL) {
-                set_queue_getput_pos(request->qname, request->qname_length, getpos, putpos+1);
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2);
-                uvbuf[0].base = repbuf->buf;
-                uvbuf[0].len = len;
-                uvbuf[1].base = "OK";
-                uvbuf[1].len = 2;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
-            }
-            else {
-                uvbuf[1].base = repbuf->leveldb_err;
-                uvbuf[1].len = strlen(repbuf->leveldb_err);
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", uvbuf[1].len);
-                uvbuf[0].base = repbuf->buf;
-                uvbuf[0].len = len;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
-            }
+            k.data = qname;
+            k.len = qlen;
+            v.data = (char *)request->body;
+            v.len = request->body_length;
+            db_put(&k, &v);
+            set_queue_getput_pos(request->qname, request->qname_length, getpos, putpos+1);
+            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2);
+            uvbuf[0].base = repbuf->buf;
+            uvbuf[0].len = len;
+            uvbuf[1].base = "OK";
+            uvbuf[1].len = 2;
+            uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
         case HTTP_DELETE:
         case HTTP_PURGE:
@@ -527,27 +358,37 @@ int on_message_complete(http_parser* parser) {
     return 0;
 }
 
+void signal_handler(int sig) {
+    uv_stop(uv_loop);
+    db_close();
+    terrx(sig, "receive signal %d, exited.", sig);
+}
+
 int main(int argc, char *argv[]) {
-    char *errstr = NULL;
     int r;
     
-    conf_init(conf);
     if (argc == 2 && conf_loadfile(conf, argv[1]) != 0) {
         terrx(1, "failed to load conf %s", argv[1]);
     }
-    
-    db_options = leveldb_options_create();
-    leveldb_options_set_create_if_missing(db_options, 1);
-    leveldb_options_set_cache(db_options, leveldb_cache_create_lru(conf->cache_size));
-    leveldb_options_set_block_size(db_options, conf->block_size);
-    leveldb_options_set_write_buffer_size(db_options, conf->write_buffer_size);
-    leveldb_options_set_filter_policy(db_options, leveldb_filterpolicy_create_bloom(10));
-    db = leveldb_open(db_options, conf->db, &errstr);
-    if (errstr) {
-        terrx(1, "unable to open db at %s: %s", conf->db, errstr);
+
+    switch (conf->engine) {
+        case engine_leveldb:
+            db_leveldb_init();
+            db_get = db_leveldb_get;
+            db_put = db_leveldb_put;
+            db_delete = db_leveldb_delete;
+            db_close = db_leveldb_close;
+            break;
+        case engine_lmdb:
+            db_lmdb_init();
+            db_get = db_lmdb_get;
+            db_put = db_lmdb_put;
+            db_delete = db_lmdb_delete;
+            db_close = db_lmdb_close;
+            break;
+        default:
+            terrx(-1, "unsuppored db engine");
     }
-    db_roptions = leveldb_readoptions_create();
-    db_woptions = leveldb_writeoptions_create();
 
     parser_settings.on_message_begin = on_message_begin;
     parser_settings.on_url = on_url;
@@ -570,6 +411,7 @@ int main(int argc, char *argv[]) {
     uv_assert(r, "uv_listen");
 
     printf("     levelq "LEVELQ_VERSION"\n");
+    printf("engine:           : %s\n", conf->engine == engine_leveldb ? "leveldb" : conf->engine == engine_lmdb ? "lmdb" : "unknown");
     printf("db                : %s\n", conf->db);
     printf("cache_size        : %u\n", conf->cache_size);
     printf("block_size        : %u\n", conf->block_size);
@@ -580,8 +422,14 @@ int main(int argc, char *argv[]) {
     printf("\n");
     printf("listening on %s:%hu\n", conf->host, conf->port);
 
+    signal (SIGINT, signal_handler);
+    signal (SIGKILL, signal_handler);
+    signal (SIGTERM, signal_handler);
+    signal (SIGHUP, signal_handler);
+    signal (SIGSEGV, signal_handler);
+
     uv_run(uv_loop, UV_RUN_DEFAULT);
-    leveldb_close(db);
+    db_close();
 
     return 0;
 }

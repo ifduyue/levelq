@@ -7,3 +7,6 @@
 [submodule "deps/http-parser"]
 	path = deps/http-parser
 	url = https://github.com/joyent/http-parser.git
+[submodule "deps/mdb"]
+	path = deps/mdb
+	url = https://git.gitorious.org/mdb/mdb.git
