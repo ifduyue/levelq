@@ -2,6 +2,8 @@
 #define _H_H_
 
 #include <err.h>
+#include <stdlib.h>
+#include "jemalloc/jemalloc.h"
 #include "http_parser.h"
 #include "uv.h"
 #include "lmdb.h"

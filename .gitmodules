@@ -10,3 +10,6 @@
 [submodule "deps/mdb"]
 	path = deps/mdb
 	url = https://git.gitorious.org/mdb/mdb.git
+[submodule "deps/jemalloc"]
+	path = deps/jemalloc
+	url = git://canonware.com/jemalloc.git

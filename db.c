@@ -1,6 +1,5 @@
 #include "db.h"
 #include <assert.h>
-#include <stdlib.h>
 
 dbi_t *dbi_new() {
     dbi_t *item = (dbi_t *)malloc(sizeof(dbi_t));
