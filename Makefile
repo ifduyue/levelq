@@ -1,6 +1,7 @@
-CFLAGS=-Wall -Wextra -Werror -Wno-error=unused-result -O2 -g -pthread -I. -Ideps -Ideps/http-parser -Ideps/leveldb/include -Ideps/libuv/include -Ideps/mdb/libraries/liblmdb
+CFLAGS=-Wall -Wextra -Werror -Wno-unused-result -O2 -g -pthread -I. -Ideps -Ideps/http-parser -Ideps/leveldb/include -Ideps/libuv/include -Ideps/mdb/libraries/liblmdb
 CLIBS=deps/libuv/libuv.a deps/leveldb/libleveldb.a deps/http-parser/http_parser.o deps/mdb/libraries/liblmdb/liblmdb.a -lstdc++
 OBJS=db.o db_leveldb.o db_lmdb.o conf.o
+
 ifeq ($(shell uname), Darwin)
 	CLIBS+=-framework Carbon -framework CoreServices
 else
@@ -36,10 +37,12 @@ clean:
 	$(MAKE) -C deps/libuv clean
 	$(MAKE) -C deps/http-parser clean
 	$(MAKE) -C deps/leveldb clean
+	$(MAKE) -C deps/mdb/libraries/liblmdb clean
 	rm -f *.o
 
 distclean: clean
+	$(MAKE) -C deps/libuv distclean
 	rm -f levelq
 
 .PHONY:
-	clean distclean deps deps/libuv deps/http-parser deps/leveldb
+	clean distclean libuv http-parser leveldb
