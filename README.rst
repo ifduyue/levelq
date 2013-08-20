@@ -3,6 +3,15 @@ levelq
 
 A simple queue service using leveldb as storage.
 
+Compile
+---------
+
+::
+    $ git clone https://github.com/ifduyue/levelq.git
+    $ cd levelq
+    $ git submodule update --init
+    $ make
+
 Usage
 ------
 
