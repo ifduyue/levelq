@@ -341,8 +341,8 @@ int on_message_complete(http_parser* parser) {
             len = snprintf(repbuf->buf, BUFSIZE, "{\"name\":\"%s\",\"putpos\":%"PRIu64",\"getpos\":%"PRIu64"}\n", request->qname, putpos, getpos);
             uvbuf[1].base = repbuf->buf;
             uvbuf[1].len = len;
-            len = snprintf(repbuf->buf + len + 2, BUFSIZE - len - 1, HEADER, 200, "OK", (size_t)len);
             uvbuf[0].base = repbuf->buf + len + 2;
+            len = snprintf(repbuf->buf + len + 2, BUFSIZE - len - 1, HEADER, 200, "OK", (size_t)len);
             uvbuf[0].len = len;
             uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
