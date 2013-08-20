@@ -17,8 +17,8 @@ void db_lmdb_init() {
         terrx(r, "mdb_env_create failed: %s", mdb_strerror(r));
     }
     
-    if (conf->cache_size > 10485760u) {
-        r = mdb_env_set_mapsize(env, conf->cache_size);
+    if (conf->lmdb_mapsize > 10485760u) {
+        r = mdb_env_set_mapsize(env, conf->lmdb_mapsize);
         if (r) {
             terrx(r, "mdb_env_set_mapsize failed: %s", mdb_strerror(r));
         }

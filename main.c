@@ -410,23 +410,28 @@ int main(int argc, char *argv[]) {
     r = uv_listen((uv_stream_t*)&server, 128, on_connect);
     uv_assert(r, "uv_listen");
 
-    printf("     levelq "LEVELQ_VERSION"\n");
-    printf("engine:           : %s\n", conf->engine == engine_leveldb ? "leveldb" : conf->engine == engine_lmdb ? "lmdb" : "unknown");
-    printf("db                : %s\n", conf->db);
-    printf("cache_size        : %u\n", conf->cache_size);
-    printf("block_size        : %u\n", conf->block_size);
-    printf("write_buffer_size : %u\n", conf->write_buffer_size);
-    printf("tcp_keepalive     : %u\n", conf->tcp_keepalive);
-    printf("tcp_nodelay       : %s\n", conf->tcp_nodelay ? "true" : "false");
-    printf("delete_after_get  : %s\n", conf->delete_after_get ? "true" : "false");
+    printf("            levelq "LEVELQ_VERSION"\n");
+    printf("engine:                   : %s\n", conf->engine == engine_leveldb ? "leveldb" : conf->engine == engine_lmdb ? "lmdb" : "unknown");
+    printf("db                        : %s\n", conf->db);
+    printf("tcp_keepalive             : %u\n", conf->tcp_keepalive);
+    printf("tcp_nodelay               : %s\n", conf->tcp_nodelay ? "true" : "false");
+    printf("delete_after_get          : %s\n", conf->delete_after_get ? "true" : "false");
+    if (conf->engine == engine_leveldb) {
+        printf("leveldb_cache_size        : %u\n", conf->leveldb_cache_size);
+        printf("leveldb_block_size        : %u\n", conf->leveldb_block_size);
+        printf("leveldb_write_buffer_size : %u\n", conf->leveldb_write_buffer_size);
+    }
+    else if (conf->engine == engine_lmdb) {
+        printf("lmdb_mapsize              : %zu\n", conf->lmdb_mapsize);
+    }
     printf("\n");
     printf("listening on %s:%hu\n", conf->host, conf->port);
 
-    signal (SIGINT, signal_handler);
-    signal (SIGKILL, signal_handler);
-    signal (SIGTERM, signal_handler);
-    signal (SIGHUP, signal_handler);
-    signal (SIGSEGV, signal_handler);
+    signal(SIGINT, signal_handler);
+    signal(SIGKILL, signal_handler);
+    signal(SIGTERM, signal_handler);
+    signal(SIGHUP, signal_handler);
+    signal(SIGSEGV, signal_handler);
 
     uv_run(uv_loop, UV_RUN_DEFAULT);
     db_close();

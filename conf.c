@@ -3,29 +3,31 @@
 #include <stdio.h>
 
 conf_t conf[1] = {{
-    engine_leveldb,
-    "127.0.0.1",
-    1219,
-    128 * 1048576, /* 128MB */
-    8 * 1024, /* 8KB */
-    8 * 1048576, /* 8MB */
-    "./db",
-    10,
-    1,
-    0
+    engine_leveldb, /* engine */
+    "127.0.0.1", /* host */
+    1219, /* port */
+    "./db", /* db */
+    10, /* tcp_keepalive */
+    1, /* tcp_nodelay */
+    0, /* delete_after_get */
+    128 * 1048576, /* 128MB, leveldb_cache_size */
+    8 * 1024, /* 8KB, leveldb_block_size */
+    8 * 1048576, /* 8MB, leveldb_write_buffer_size */
+    1024u * 1024u * 1024u * 2u /* 2GB, lmdb_mapsize */
 },};
 
 void conf_init(conf_t *conf) {
     conf->engine = engine_leveldb;
     conf->host = strdup("127.0.0.1");
     conf->port = 1219;
-    conf->cache_size = 128 * 1048576; /* 128MB */
-    conf->block_size = 8 * 1024; /* 8KB */
-    conf->write_buffer_size = 8 * 1048576; /* 8MB */
     conf->tcp_keepalive = 10;
     conf->tcp_nodelay = 1;
     conf->delete_after_get = 0;
     conf->db = strdup("./db");
+    conf->leveldb_cache_size = 128 * 1048576; /* 128MB */
+    conf->leveldb_block_size = 8 * 1024; /* 8KB */
+    conf->leveldb_write_buffer_size = 8 * 1048576; /* 8MB */
+    conf->lmdb_mapsize = 1024u * 1024u * 1024u * 2u; /* 2GB */
 }
 
 int conf_loadfile(conf_t *conf, char *filename) {
@@ -66,15 +68,6 @@ int conf_loadfile(conf_t *conf, char *filename) {
         else if (!strcmp(k, "port")) {
             sscanf(v, "%hu", &conf->port);
         }
-        else if (!strcmp(k, "cache_size")) {
-            sscanf(v, "%u", &conf->cache_size);
-        }
-        else if (!strcmp(k, "block_size")) {
-            sscanf(v, "%u", &conf->block_size);
-        }
-        else if (!strcmp(k, "write_buffer_size")) {
-            sscanf(v, "%u", &conf->write_buffer_size);
-        }
         else if (!strcmp(k, "db")) {
             conf->db = strdup(v);
         }
@@ -86,6 +79,18 @@ int conf_loadfile(conf_t *conf, char *filename) {
         }
         else if (!strcmp(k, "delete_after_get")) {
             sscanf(v, "%u", &conf->delete_after_get);
+        }
+        else if (!strcmp(k, "leveldb_cache_size")) {
+            sscanf(v, "%zu", &conf->leveldb_cache_size);
+        }
+        else if (!strcmp(k, "leveldb_block_size")) {
+            sscanf(v, "%zu", &conf->leveldb_block_size);
+        }
+        else if (!strcmp(k, "leveldb_write_buffer_size")) {
+            sscanf(v, "%zu", &conf->leveldb_write_buffer_size);
+        }
+        else if (!strcmp(k, "lmdb_mapsize")) {
+            sscanf(v, "%zu", &conf->lmdb_mapsize);
         }
         else {
             twarnx("error in %s line %i", filename, line);

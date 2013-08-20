@@ -89,13 +89,16 @@ typedef struct {
     engine_t engine;
     char *host;
     unsigned short port;
-    unsigned int cache_size;
-    unsigned int block_size;
-    unsigned int write_buffer_size;
     char *db;
     unsigned int tcp_keepalive;
     unsigned int tcp_nodelay;
     unsigned int delete_after_get;
+    /* leveldb only */
+    size_t leveldb_cache_size;
+    size_t leveldb_block_size;
+    size_t leveldb_write_buffer_size;
+    /* lmdb only */
+    size_t lmdb_mapsize;
 } conf_t;
 
 typedef struct {
