@@ -417,9 +417,9 @@ int main(int argc, char *argv[]) {
     printf("tcp_nodelay               : %s\n", conf->tcp_nodelay ? "true" : "false");
     printf("delete_after_get          : %s\n", conf->delete_after_get ? "true" : "false");
     if (conf->engine == engine_leveldb) {
-        printf("leveldb_cache_size        : %u\n", conf->leveldb_cache_size);
-        printf("leveldb_block_size        : %u\n", conf->leveldb_block_size);
-        printf("leveldb_write_buffer_size : %u\n", conf->leveldb_write_buffer_size);
+        printf("leveldb_cache_size        : %zu\n", conf->leveldb_cache_size);
+        printf("leveldb_block_size        : %zu\n", conf->leveldb_block_size);
+        printf("leveldb_write_buffer_size : %zu\n", conf->leveldb_write_buffer_size);
     }
     else if (conf->engine == engine_lmdb) {
         printf("lmdb_mapsize              : %zu\n", conf->lmdb_mapsize);
