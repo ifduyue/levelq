@@ -6,8 +6,6 @@
 #include "jemalloc/jemalloc.h"
 #include "http_parser.h"
 #include "uv.h"
-#include "lmdb.h"
-#include "leveldb/c.h"
 
 #define BUFSIZE 512
 #define LEVELQ_VERSION "0.0.1"
@@ -82,7 +80,8 @@ typedef struct {
 
 typedef enum {
     engine_leveldb,
-    engine_lmdb
+    engine_lmdb,
+    engine_unqlite
 } engine_t;
 
 typedef struct {

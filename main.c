@@ -13,6 +13,7 @@
 #include "db.h"
 #include "db_lmdb.h"
 #include "db_leveldb.h"
+#include "db_unqlite.h"
 #include "conf.h"
 
 typedef struct {
@@ -21,7 +22,7 @@ typedef struct {
 } repbuf_t;
 
 repbuf_t *repbuf_new(size_t size) {
-    repbuf_t *repbuf = (repbuf_t *)malloc(sizeof(repbuf_t) + size);
+    repbuf_t *repbuf = malloc(sizeof(repbuf_t) + size);
     assert(repbuf);
     repbuf->item = NULL;
     return repbuf;
@@ -29,9 +30,7 @@ repbuf_t *repbuf_new(size_t size) {
 
 void repbuf_free(repbuf_t *repbuf) {
     if (repbuf) {
-        if (repbuf->item) {
-            dbi_destroy(repbuf->item);
-        }
+        dbi_destroy(repbuf->item);
         free(repbuf);
     }
 }
@@ -81,7 +80,7 @@ void on_connect(uv_stream_t* server_handle, int status) {
     uv_tcp_keepalive((uv_tcp_t *)server_handle, conf->tcp_keepalive, conf->tcp_keepalive);
     uv_tcp_nodelay((uv_tcp_t *)server_handle, conf->tcp_nodelay);
     
-    client_t *client = (client_t *)malloc(sizeof(client_t));
+    client_t *client = malloc(sizeof(client_t));
 
     uv_tcp_init(uv_loop, &client->handle);
     http_parser_init(&client->parser, HTTP_REQUEST);
@@ -163,7 +162,7 @@ int queue_getput_pos(char *queue, uint64_t *getpos, uint64_t *putpos) {
     k.len = strlen(queue);
     vp = db_get(&k);
     if (vp->err != NULL) {
-        twarn("%s", vp->err);
+        twarnx("%s", vp->err);
         dbi_destroy(vp);
         return -1;
     }
@@ -386,6 +385,13 @@ int main(int argc, char *argv[]) {
             db_delete = db_lmdb_delete;
             db_close = db_lmdb_close;
             break;
+        case engine_unqlite:
+            db_unqlite_init();
+            db_get = db_unqlite_get;
+            db_put = db_unqlite_put;
+            db_delete = db_unqlite_delete;
+            db_close = db_unqlite_close;
+            break;
         default:
             terrx(-1, "unsuppored db engine");
     }
@@ -411,7 +417,10 @@ int main(int argc, char *argv[]) {
     uv_assert(r, "uv_listen");
 
     printf("            levelq "LEVELQ_VERSION"\n");
-    printf("engine:                   : %s\n", conf->engine == engine_leveldb ? "leveldb" : conf->engine == engine_lmdb ? "lmdb" : "unknown");
+    printf("engine:                   : %s\n", conf->engine == engine_leveldb ? "leveldb" : 
+                                               conf->engine == engine_lmdb ? "lmdb" : 
+                                               conf->engine == engine_unqlite ? "unqlite" :
+                                               "unknown");
     printf("db                        : %s\n", conf->db);
     printf("tcp_keepalive             : %u\n", conf->tcp_keepalive);
     printf("tcp_nodelay               : %s\n", conf->tcp_nodelay ? "true" : "false");

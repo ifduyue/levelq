@@ -2,7 +2,7 @@
 #include <assert.h>
 
 dbi_t *dbi_new() {
-    dbi_t *item = (dbi_t *)malloc(sizeof(dbi_t));
+    dbi_t *item = malloc(sizeof(dbi_t));
     assert(item);
     item->err = NULL;
     item->data = NULL;

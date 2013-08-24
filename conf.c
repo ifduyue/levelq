@@ -58,8 +58,11 @@ int conf_loadfile(conf_t *conf, char *filename) {
             else if (!strcmp(v, "lmdb")) {
                 conf->engine = engine_lmdb;
             }
+            else if (!strcmp(v, "unqlite")) {
+                conf->engine = engine_unqlite;
+            }
             else {
-                terrx(1, "supported engines are leveldb, lmdb");
+                terrx(1, "supported engines are leveldb, lmdb, unqlite");
             }
         }
         else if (!strcmp(k, "host")) {
