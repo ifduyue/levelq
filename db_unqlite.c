@@ -1,6 +1,7 @@
 #include "unqlite.h"
 #include "db.h"
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 static unqlite *db = NULL;
