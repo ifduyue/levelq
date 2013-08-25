@@ -207,7 +207,7 @@ int on_message_complete(http_parser* parser) {
     client->write_req.data = repbuf;
     if (request->qname_length == 0 ||  strspn(request->qname, QUEUE_CHARS) != request->qname_length) {
         /* invalid qname */
-        len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)18);
+        len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)18, client->keepalive ? "keep-alive" : "close");
         uvbuf[0].base = repbuf->buf;
         uvbuf[0].len = len;
         uvbuf[1].base = "INVALID QUEUE NAME";
@@ -219,7 +219,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_GET:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
             if (r > 0) {
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 404, "NOT FOUND", (size_t)16);
+                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 404, "NOT FOUND", (size_t)16, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "QUEUE NOT EXISTS";
@@ -228,7 +228,7 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             else if (r < 0) {
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 500, "Internal Server Error", (size_t)21);
+                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 500, "Internal Server Error", (size_t)21, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
@@ -237,7 +237,7 @@ int on_message_complete(http_parser* parser) {
                 break;
             }
             if (getpos == putpos) {
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 404, "NOT FOUND", (size_t)11);
+                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 404, "NOT FOUND", (size_t)11, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "QUEUE EMPTY";
@@ -254,14 +254,14 @@ int on_message_complete(http_parser* parser) {
             if (vp->err != NULL) {
                 uvbuf[1].base = vp->err;
                 uvbuf[1].len = strlen(vp->err);
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", uvbuf[1].len);
+                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", uvbuf[1].len, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
                 uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             set_queue_getput_pos(request->qname, request->qname_length, getpos + 1, putpos);
-            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", vp->len);
+            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", vp->len, client->keepalive ? "keep-alive" : "close");
             uvbuf[0].base = repbuf->buf;
             uvbuf[0].len = len;
             uvbuf[1].base = vp->data;
@@ -274,7 +274,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_PUT:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
             if (r < 0) {
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 500, "Internal Server Error", (size_t)21);
+                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 500, "Internal Server Error", (size_t)21, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
@@ -289,7 +289,7 @@ int on_message_complete(http_parser* parser) {
             v.len = request->body_length;
             db_put(&k, &v);
             set_queue_getput_pos(request->qname, request->qname_length, getpos, putpos+1);
-            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2);
+            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2, client->keepalive ? "keep-alive" : "close");
             uvbuf[0].base = repbuf->buf;
             uvbuf[0].len = len;
             uvbuf[1].base = "OK";
@@ -299,7 +299,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_DELETE:
         case HTTP_PURGE:
             set_queue_getput_pos(request->qname, request->qname_length, 0, 0);
-            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2);
+            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 200, "OK", (size_t)2, client->keepalive ? "keep-alive" : "close");
             uvbuf[0].base = repbuf->buf;
             uvbuf[0].len = len;
             uvbuf[1].base = "OK";
@@ -309,7 +309,7 @@ int on_message_complete(http_parser* parser) {
         case HTTP_OPTIONS:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
             if (r < 0) {
-                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 500, "Internal Server Error", (size_t)21);
+                len = snprintf(repbuf->buf, BUFSIZE, HEADER, 500, "Internal Server Error", (size_t)21, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
@@ -321,12 +321,12 @@ int on_message_complete(http_parser* parser) {
             uvbuf[1].base = repbuf->buf;
             uvbuf[1].len = len;
             uvbuf[0].base = repbuf->buf + len + 2;
-            len = snprintf(repbuf->buf + len + 2, BUFSIZE - len - 1, HEADER, 200, "OK", (size_t)len);
+            len = snprintf(repbuf->buf + len + 2, BUFSIZE - len - 1, HEADER, 200, "OK", (size_t)len, client->keepalive ? "keep-alive" : "close");
             uvbuf[0].len = len;
             uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
         default:
-            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)14);
+            len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)14, client->keepalive ? "keep-alive" : "close");
             uvbuf[0].base = repbuf->buf;
             uvbuf[0].len = len;
             uvbuf[1].base = "INVALID METHOD";

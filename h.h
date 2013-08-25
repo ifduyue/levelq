@@ -15,7 +15,7 @@
                  "Server: levelq/"LEVELQ_VERSION"\r\n"\
                  "Content-Type: application/octet-stream\r\n"\
                  "Content-Length: %zu\r\n"\
-                 "Connection: keep-alive\r\n"\
+                 "Connection: %s\r\n"\
                  "Cache-Control: no-store, no-cache, must-revalidate\r\n"\
                  "Pragma: no-cache\r\n"\
                  "\r\n"
