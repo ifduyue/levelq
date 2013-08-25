@@ -71,13 +71,6 @@ typedef struct {
     unsigned short keepalive : 1;
 } client_t;
 
-typedef struct {
-    struct {
-        const char *at;
-        size_t length;
-    } k, v;
-} header_kv_t;
-
 typedef enum {
     engine_leveldb,
     engine_lmdb,
@@ -110,7 +103,6 @@ typedef struct {
 
 extern conf_t conf[1];
 extern http_parser_settings parser_settings;
-extern header_kv_t header_kv;
 extern uv_buf_t uvbuf[2];
 extern uv_loop_t* uv_loop;
 extern uv_tcp_t server;

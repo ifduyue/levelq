@@ -122,27 +122,10 @@ int on_url(http_parser* parser, const char* at, size_t length) {
     return 0;
 }
 
-int on_header_field(http_parser* parser, const char* at, size_t length) {
-    (void)parser;
-    header_kv.k.at = at;
-    header_kv.k.length = length;
-    return 0;
-}
-
-int on_header_value(http_parser* parser, const char* at, size_t length) {
-    client_t *client = (client_t *)parser->data;
-    header_kv.v.at = at;
-    header_kv.v.length = length;
-    if (!client->keepalive && !memcmp("Connection", header_kv.k.at, header_kv.k.length) && !strncasecmp("keep-alive", at, length)) {
-        client->keepalive = 1; 
-    }
-    return 0;
-}
-
-
 int on_headers_complete(http_parser* parser) {
     client_t *client = (client_t *)parser->data;
     client->request.method = (enum http_method)parser->method;
+    client->keepalive = http_should_keep_alive(parser);
     return 0;
 }
 
@@ -399,8 +382,6 @@ int main(int argc, char *argv[]) {
     parser_settings.on_body = on_body;
     parser_settings.on_headers_complete = on_headers_complete;
     parser_settings.on_message_complete = on_message_complete;
-    parser_settings.on_header_field = on_header_field;
-    parser_settings.on_header_value = on_header_value;
 
     uv_loop = uv_default_loop();
   
