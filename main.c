@@ -38,7 +38,6 @@ void repbuf_free(repbuf_t *repbuf) {
 uv_loop_t* uv_loop;
 uv_tcp_t server;
 http_parser_settings parser_settings;
-header_kv_t header_kv;
 uv_buf_t uvbuf[2];
 
 void on_close(uv_handle_t* handle) {
@@ -388,8 +387,8 @@ int main(int argc, char *argv[]) {
     r = uv_tcp_init(uv_loop, &server);
     uv_assert(r, "uv_tcp_init");
 
-    uv_tcp_keepalive((uv_tcp_t *)server_handle, conf->tcp_keepalive, conf->tcp_keepalive);
-    uv_tcp_nodelay((uv_tcp_t *)server_handle, conf->tcp_nodelay);
+    uv_tcp_keepalive(&server, conf->tcp_keepalive, conf->tcp_keepalive);
+    uv_tcp_nodelay(&server, conf->tcp_nodelay);
 
     struct sockaddr_in address = uv_ip4_addr(conf->host, conf->port);
     r = uv_tcp_bind(&server, address);
