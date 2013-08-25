@@ -77,8 +77,6 @@ void on_connect(uv_stream_t* server_handle, int status) {
     int r;
 
     assert((uv_tcp_t*)server_handle == &server);
-    uv_tcp_keepalive((uv_tcp_t *)server_handle, conf->tcp_keepalive, conf->tcp_keepalive);
-    uv_tcp_nodelay((uv_tcp_t *)server_handle, conf->tcp_nodelay);
     
     client_t *client = malloc(sizeof(client_t));
 
@@ -408,6 +406,9 @@ int main(int argc, char *argv[]) {
   
     r = uv_tcp_init(uv_loop, &server);
     uv_assert(r, "uv_tcp_init");
+
+    uv_tcp_keepalive((uv_tcp_t *)server_handle, conf->tcp_keepalive, conf->tcp_keepalive);
+    uv_tcp_nodelay((uv_tcp_t *)server_handle, conf->tcp_nodelay);
 
     struct sockaddr_in address = uv_ip4_addr(conf->host, conf->port);
     r = uv_tcp_bind(&server, address);
