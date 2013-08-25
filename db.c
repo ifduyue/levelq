@@ -16,7 +16,7 @@ void dbi_destroy(dbi_t *item) {
         if (item->err) {
             free(item->err);
         }
-        if (item->len && item->data && item->data_is_malloced) {
+        if (item->data && item->data_is_malloced) {
             free(item->data);
         }
         free(item);
