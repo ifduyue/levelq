@@ -56,20 +56,20 @@
     } while (0)
 
 typedef struct {
+    uv_tcp_t handle;
+    http_parser parser;
+    unsigned short keepalive : 1;
+} client_t;
+
+typedef struct {
+    uv_write_t write_req;
+    client_t *client;
     char qname[200];
     size_t qname_length;
     enum http_method method;
     const char *body;
     size_t body_length;
 } request_t;
-
-typedef struct {
-    http_parser parser;
-    uv_tcp_t handle;
-    uv_write_t write_req;
-    request_t request;
-    unsigned short keepalive : 1;
-} client_t;
 
 typedef enum {
     engine_leveldb,

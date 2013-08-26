@@ -94,14 +94,16 @@ void on_connect(uv_stream_t* server_handle, int status) {
 
 int on_message_begin(http_parser* parser) {
     client_t *client = (client_t *)parser->data;
-    client->request.qname_length = 0;
-    client->request.body_length = 0;
+    request_t *request = malloc(sizeof(request_t));
+    request->qname_length = 0;
+    request->body_length = 0;
+    request->client = client;
+    parser->data = request;
     return 0;
 }
 
 int on_url(http_parser* parser, const char* at, size_t length) {
-    client_t *client = (client_t *)parser->data;
-    request_t *request = &client->request;
+    request_t *request = (request_t *)parser->data;
     struct http_parser_url url;
     http_parser_parse_url(at, length, 0, &url);
     if (url.field_set & (1 << UF_PATH)) {
@@ -122,16 +124,17 @@ int on_url(http_parser* parser, const char* at, size_t length) {
 }
 
 int on_headers_complete(http_parser* parser) {
-    client_t *client = (client_t *)parser->data;
-    client->request.method = (enum http_method)parser->method;
+    request_t *request = (request_t *)parser->data;
+    client_t *client = request->client;
+    request->method = (enum http_method)parser->method;
     client->keepalive = http_should_keep_alive(parser);
     return 0;
 }
 
 int on_body(http_parser* parser, const char* at, size_t length) {
-    client_t *client = (client_t *)parser->data;
-    client->request.body = at;
-    client->request.body_length = length;
+    request_t *request = (request_t *)parser->data;
+    request->body = at;
+    request->body_length = length;
     return 0;
 }
 
@@ -186,25 +189,33 @@ void set_queue_getput_pos(char *qname, int qlen, uint64_t getpos, uint64_t putpo
 void after_write(uv_write_t *req, int status) {
     uv_check(status, "write");
 
-    repbuf_t *repbuf = (repbuf_t *)req->data;
+    request_t *request = (request_t *)req;
+    client_t *client = request->client;
+    repbuf_t *repbuf = request->write_req.data;
     repbuf_free(repbuf);
+    free(request);
 
-    client_t *client = (client_t *)container_of(req, client_t, write_req);
-    if (!client->keepalive && !uv_is_closing((uv_handle_t *)req->handle)) {
+    if (!status) {
+        if (!client->keepalive && !uv_is_closing((uv_handle_t *)req->handle)) {
+            uv_close((uv_handle_t *)req->handle, on_close);
+        }
+    }
+    else if (!uv_is_closing((uv_handle_t *)req->handle)) {
         uv_close((uv_handle_t *)req->handle, on_close);
     }
 }
 
 int on_message_complete(http_parser* parser) {
-    client_t *client = (client_t*)parser->data;
-    request_t *request = &client->request;
+    request_t *request = (request_t *)parser->data;
+    client_t *client = request->client;
+    parser->data = client;
     char qname[255];
     int qlen, len, r;
     uint64_t getpos, putpos;
     dbi_t k, v, *vp;
 
     repbuf_t *repbuf  = repbuf_new(BUFSIZE);
-    client->write_req.data = repbuf;
+    request->write_req.data = repbuf;
     if (request->qname_length == 0 ||  strspn(request->qname, QUEUE_CHARS) != request->qname_length) {
         /* invalid qname */
         len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)18, client->keepalive ? "keep-alive" : "close");
@@ -212,7 +223,7 @@ int on_message_complete(http_parser* parser) {
         uvbuf[0].len = len;
         uvbuf[1].base = "INVALID QUEUE NAME";
         uvbuf[1].len = 18;
-        uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+        uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
         return 0;
     }
     switch (request->method) {
@@ -224,7 +235,7 @@ int on_message_complete(http_parser* parser) {
                 uvbuf[0].len = len;
                 uvbuf[1].base = "QUEUE NOT EXISTS";
                 uvbuf[1].len = 16;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+                uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             else if (r < 0) {
@@ -233,7 +244,7 @@ int on_message_complete(http_parser* parser) {
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
                 uvbuf[1].len = 21;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+                uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             if (getpos == putpos) {
@@ -242,7 +253,7 @@ int on_message_complete(http_parser* parser) {
                 uvbuf[0].len = len;
                 uvbuf[1].base = "QUEUE EMPTY";
                 uvbuf[1].len = 11;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+                uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
 
@@ -257,7 +268,7 @@ int on_message_complete(http_parser* parser) {
                 len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", uvbuf[1].len, client->keepalive ? "keep-alive" : "close");
                 uvbuf[0].base = repbuf->buf;
                 uvbuf[0].len = len;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+                uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             set_queue_getput_pos(request->qname, request->qname_length, getpos + 1, putpos);
@@ -266,7 +277,7 @@ int on_message_complete(http_parser* parser) {
             uvbuf[0].len = len;
             uvbuf[1].base = vp->data;
             uvbuf[1].len = vp->len;
-            uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+            uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             if (conf->delete_after_get) {
                 db_delete(&k);
             }
@@ -279,7 +290,7 @@ int on_message_complete(http_parser* parser) {
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
                 uvbuf[1].len = 21;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+                uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             qlen = snprintf(qname, sizeof(qname), "%s:%"PRIu64, request->qname, putpos);
@@ -294,7 +305,7 @@ int on_message_complete(http_parser* parser) {
             uvbuf[0].len = len;
             uvbuf[1].base = "OK";
             uvbuf[1].len = 2;
-            uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+            uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
         case HTTP_DELETE:
         case HTTP_PURGE:
@@ -304,7 +315,7 @@ int on_message_complete(http_parser* parser) {
             uvbuf[0].len = len;
             uvbuf[1].base = "OK";
             uvbuf[1].len = 2;
-            uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+            uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
         case HTTP_OPTIONS:
             r = queue_getput_pos(request->qname, &getpos, &putpos);
@@ -314,7 +325,7 @@ int on_message_complete(http_parser* parser) {
                 uvbuf[0].len = len;
                 uvbuf[1].base = "Internal Server Error";
                 uvbuf[1].len = 21;
-                uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+                uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
                 break;
             }
             len = snprintf(repbuf->buf, BUFSIZE, "{\"name\":\"%s\",\"putpos\":%"PRIu64",\"getpos\":%"PRIu64"}\n", request->qname, putpos, getpos);
@@ -323,7 +334,7 @@ int on_message_complete(http_parser* parser) {
             uvbuf[0].base = repbuf->buf + len + 2;
             len = snprintf(repbuf->buf + len + 2, BUFSIZE - len - 1, HEADER, 200, "OK", (size_t)len, client->keepalive ? "keep-alive" : "close");
             uvbuf[0].len = len;
-            uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+            uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
         default:
             len = snprintf(repbuf->buf, BUFSIZE, HEADER, 400, "Bad Request", (size_t)14, client->keepalive ? "keep-alive" : "close");
@@ -331,7 +342,7 @@ int on_message_complete(http_parser* parser) {
             uvbuf[0].len = len;
             uvbuf[1].base = "INVALID METHOD";
             uvbuf[1].len = 14;
-            uv_write((uv_write_t *)&client->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
+            uv_write(&request->write_req, (uv_stream_t *)&client->handle, uvbuf, 2, after_write);
             break;
     }
     return 0;
