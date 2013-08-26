@@ -84,7 +84,6 @@ void on_connect(uv_stream_t* server_handle, int status) {
 
     client->parser.data = client;
     client->handle.data = client;
-    client->keepalive = 0;
 
     r = uv_accept(server_handle, (uv_stream_t*)&client->handle);
     uv_check(r, "accept");
@@ -94,6 +93,7 @@ void on_connect(uv_stream_t* server_handle, int status) {
 
 int on_message_begin(http_parser* parser) {
     client_t *client = (client_t *)parser->data;
+    client->keepalive = 0;
     request_t *request = malloc(sizeof(request_t));
     request->qname_length = 0;
     request->body_length = 0;
@@ -193,7 +193,6 @@ void after_write(uv_write_t *req, int status) {
     client_t *client = request->client;
     repbuf_t *repbuf = request->write_req.data;
     repbuf_free(repbuf);
-    free(request);
 
     if (!status) {
         if (!client->keepalive && !uv_is_closing((uv_handle_t *)req->handle)) {
@@ -203,6 +202,8 @@ void after_write(uv_write_t *req, int status) {
     else if (!uv_is_closing((uv_handle_t *)req->handle)) {
         uv_close((uv_handle_t *)req->handle, on_close);
     }
+
+    free(request);
 }
 
 int on_message_complete(http_parser* parser) {
