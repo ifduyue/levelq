@@ -1,5 +1,5 @@
 CFLAGS=-Wall -Wextra -Werror -Wno-unused-result -O2 -g -pthread -I. -Ideps -Ideps/http-parser -Ideps/leveldb/include -Ideps/libuv/include -Ideps/mdb/libraries/liblmdb -Ideps/jemalloc/include -Ideps/unqlite
-CLIBS=deps/libuv/libuv.a deps/leveldb/libleveldb.a deps/http-parser/http_parser.o deps/mdb/libraries/liblmdb/liblmdb.a deps/jemalloc/lib/libjemalloc.a deps/unqlite/unqlite.o -lstdc++
+CLIBS=deps/libuv/.libs/libuv.a deps/leveldb/libleveldb.a deps/http-parser/http_parser.o deps/mdb/libraries/liblmdb/liblmdb.a deps/jemalloc/lib/libjemalloc.a deps/unqlite/unqlite.o -lstdc++
 OBJS=db.o db_leveldb.o db_lmdb.o db_unqlite.o conf.o
 
 ifeq ($(shell uname), Darwin)
@@ -13,10 +13,16 @@ levelq: main.c deps $(OBJS)
 
 deps: libuv http-parser leveldb lmdb jemalloc unqlite
 
-libuv: deps/libuv/libuv.a
+libuv: deps/libuv/.libs/libuv.a
 
-deps/libuv/libuv.a:
-	$(MAKE) -C deps/libuv libuv.a
+deps/libuv/.libs/libuv.a:
+	if [ ! -f deps/libuv/Makefile ]; then \
+		if [ ! -f deps/libuv/configure ]; then \
+			cd deps/libuv && ./autogen.sh; \
+		fi; \
+		cd deps/libuv && ./configure; \
+	fi;
+	$(MAKE) -C deps/libuv
 
 http-parser: deps/http-parser/http_parser.o
 
@@ -50,19 +56,23 @@ deps/unqlite/unqlite.o:
 	$(MAKE) -C deps/unqlite unqlite.o
 
 clean:
-	$(MAKE) -C deps/libuv clean
 	$(MAKE) -C deps/http-parser clean
 	$(MAKE) -C deps/leveldb clean
 	$(MAKE) -C deps/mdb/libraries/liblmdb clean
 	if [ -f deps/jemalloc/Makefile ]; then \
 		$(MAKE) -C deps/jemalloc clean; \
 	fi;
+	if [ -f deps/libuv/Makefile ]; then \
+		$(MAKE) -C deps/jemalloc clean; \
+	fi;
 	rm -f *.o deps/unqlite/unqlite.o
 
 distclean: clean
-	$(MAKE) -C deps/libuv distclean
 	if [ -f deps/jemalloc/Makefile ]; then \
 		$(MAKE) -C deps/jemalloc distclean; \
+	fi;
+	if [ -f deps/libuv/Makefile ]; then \
+		$(MAKE) -C deps/libuv distclean; \
 	fi;
 	rm -f levelq
 

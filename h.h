@@ -42,16 +42,14 @@
 #define uv_check(r, msg) \
     do { \
         if (r) { \
-            uv_err_t err = uv_last_error(uv_loop); \
-            twarnx("%s: %s", msg, uv_strerror(err)); \
+            twarnx("%s: %s", msg, uv_strerror(r)); \
         } \
     } while (0)
 
 #define uv_assert(r, msg) \
     do { \
         if (r) { \
-            uv_err_t err = uv_last_error(uv_loop); \
-            terrx(1, "%s: %s", msg, uv_strerror(err)); \
+            terrx(1, "%s: %s", msg, uv_strerror(r)); \
         } \
     } while (0)
 
