@@ -12,13 +12,13 @@
 #define QUEUE_CHARS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_."
 #define MAX_QNAME_LENGTH 200
 #define HEADER "HTTP/1.1 %d %s\r\n"\
-                 "Server: levelq/"LEVELQ_VERSION"\r\n"\
-                 "Content-Type: application/octet-stream\r\n"\
-                 "Content-Length: %zu\r\n"\
-                 "Connection: %s\r\n"\
-                 "Cache-Control: no-store, no-cache, must-revalidate\r\n"\
-                 "Pragma: no-cache\r\n"\
-                 "\r\n"
+    "Server: levelq/"LEVELQ_VERSION"\r\n"\
+    "Content-Type: application/octet-stream\r\n"\
+    "Content-Length: %zu\r\n"\
+    "Connection: %s\r\n"\
+    "Cache-Control: no-store, no-cache, must-revalidate\r\n"\
+    "Pragma: no-cache\r\n"\
+    "\r\n"
 
 /** give offset of a field inside struct */
 #ifndef offsetof
@@ -35,9 +35,9 @@
 #define twarnx(fmt, args...) warnx("%s:%d in %s: " fmt, \
                                    __FILE__, __LINE__, __func__, ##args)
 #define terr(eval, fmt, args...) err(eval, "%s:%d in %s: " fmt, \
-                                 __FILE__, __LINE__, __func__, ##args)
+                                     __FILE__, __LINE__, __func__, ##args)
 #define terrx(eval, fmt, args...) errx(eval, "%s:%d in %s: " fmt, \
-                                   __FILE__, __LINE__, __func__, ##args)
+                                       __FILE__, __LINE__, __func__, ##args)
 
 #define uv_check(r, msg) \
     do { \
@@ -102,7 +102,7 @@ typedef struct {
 extern conf_t conf[1];
 extern http_parser_settings parser_settings;
 extern uv_buf_t uvbuf[2];
-extern uv_loop_t* uv_loop;
+extern uv_loop_t *uv_loop;
 extern uv_tcp_t server;
 
 #endif

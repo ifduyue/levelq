@@ -3,20 +3,22 @@
 #include <stdio.h>
 
 conf_t conf[1] = {{
-    engine_leveldb, /* engine */
-    "127.0.0.1", /* host */
-    1219, /* port */
-    "./db", /* db */
-    10, /* tcp_keepalive */
-    1, /* tcp_nodelay */
-    0, /* delete_after_get */
-    128 * 1048576, /* 128MB, leveldb_cache_size */
-    8 * 1024, /* 8KB, leveldb_block_size */
-    8 * 1048576, /* 8MB, leveldb_write_buffer_size */
-    1024u * 1024u * 1024u * 2u /* 2GB, lmdb_mapsize */
-},};
+        engine_leveldb, /* engine */
+        "127.0.0.1", /* host */
+        1219, /* port */
+        "./db", /* db */
+        10, /* tcp_keepalive */
+        1, /* tcp_nodelay */
+        0, /* delete_after_get */
+        128 * 1048576, /* 128MB, leveldb_cache_size */
+        8 * 1024, /* 8KB, leveldb_block_size */
+        8 * 1048576, /* 8MB, leveldb_write_buffer_size */
+        1024u * 1024u * 1024u * 2u /* 2GB, lmdb_mapsize */
+    },
+};
 
-void conf_init(conf_t *conf) {
+void conf_init(conf_t *conf)
+{
     conf->engine = engine_leveldb;
     conf->host = strdup("127.0.0.1");
     conf->port = 1219;
@@ -30,27 +32,32 @@ void conf_init(conf_t *conf) {
     conf->lmdb_mapsize = 1024u * 1024u * 1024u * 2u; /* 2GB */
 }
 
-int conf_loadfile(conf_t *conf, char *filename) {
+int conf_loadfile(conf_t *conf, char *filename)
+{
     FILE *fp;
     char k[1024], v[1024], s[1024];
     unsigned int line = 0;
-
     fp = fopen(filename, "r");
+
     if (!fp) {
         twarn("unable to open %s", filename);
         return 1;
     }
+
     while (!feof(fp)) {
         line++;
         *s = 0;
         fscanf(fp, "%1024[^\n#]s", s);
         fscanf(fp, "%*[^\n]s");
         fgetc(fp);
+
         if (strchr(s, '=') == NULL) {
             continue;
         }
+
         sscanf(s, "%[^= \t\r]s", k);
         sscanf(strchr(s, '=') + 1, "%*[ \t\r]%[^ \t\r\n]s", v);
+
         if (!strcmp(k, "engine")) {
             if (!strcmp(v, "leveldb")) {
                 conf->engine = engine_leveldb;
@@ -100,6 +107,7 @@ int conf_loadfile(conf_t *conf, char *filename) {
             return 1;
         }
     }
+
     fclose(fp);
     return 0;
 }

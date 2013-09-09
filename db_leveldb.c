@@ -8,7 +8,8 @@ static leveldb_writeoptions_t *leveldb_woptions;
 static leveldb_cache_t *leveldb_cache;
 static leveldb_filterpolicy_t *leveldb_filterpolicy;
 
-void db_leveldb_init() {
+void db_leveldb_init()
+{
     char *errstr = NULL;
     leveldb_options = leveldb_options_create();
     /* create if missing */
@@ -25,29 +26,35 @@ void db_leveldb_init() {
     leveldb_options_set_filter_policy(leveldb_options, leveldb_filterpolicy);
     /* open db */
     leveldb_db = leveldb_open(leveldb_options, conf->db, &errstr);
+
     if (errstr) {
         terrx(1, "unable to open db at %s: %s", conf->db, errstr);
     }
+
     leveldb_roptions = leveldb_readoptions_create();
     leveldb_woptions = leveldb_writeoptions_create();
 }
 
-dbi_t *db_leveldb_get(dbi_t *key) {
+dbi_t *db_leveldb_get(dbi_t *key)
+{
     dbi_t *item = dbi_new();
     item->data = leveldb_get(leveldb_db, leveldb_roptions, key->data, key->len, &item->len, &item->err);
     return item;
 }
 
-void db_leveldb_put(dbi_t *key, dbi_t *val) {
+void db_leveldb_put(dbi_t *key, dbi_t *val)
+{
     leveldb_put(leveldb_db, leveldb_woptions, key->data, key->len, val->data, val->len, NULL);
 }
 
-void db_leveldb_delete(dbi_t *key) {
+void db_leveldb_delete(dbi_t *key)
+{
     leveldb_delete(leveldb_db, leveldb_woptions, key->data, key->len, NULL);
 }
 
-void db_leveldb_close() {
-    leveldb_close(leveldb_db); 
+void db_leveldb_close()
+{
+    leveldb_close(leveldb_db);
     leveldb_cache_destroy(leveldb_cache);
     leveldb_filterpolicy_destroy(leveldb_filterpolicy);
     leveldb_options_destroy(leveldb_options);
